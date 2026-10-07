@@ -3,18 +3,25 @@
 SHELL := /usr/bin/env bash
 PYTHON ?= python3
 
-# Pinned IaC check tools, installed into .tools/ by `make iac-tools`.
+# Pinned check tools, installed into .tools/ by `make iac-tools`.
 TOOLS := $(CURDIR)/.tools
 export TFLINT_PLUGIN_DIR := $(TOOLS)/tflint-plugins
 RENDERED := build/guardrails.json
 
 .PHONY: help check test-hooks check-actions fmt-check validate test-tf \
-	iac-tools tflint trivy checkov render-policies test-policies test-iac simulate-policies
+	iac-tools tflint trivy checkov render-policies test-policies test-iac simulate-policies \
+	check-gitops helm-template up down
 
 help: ## List the targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
 
-check: test-hooks check-actions test-iac ## Run every static check the PR workflow runs
+up: ## Bring up the old and new kind clusters, Argo CD and app01 (needs Docker; see README)
+	scripts/local-up.sh
+
+down: ## Remove every kind cluster and container `make up` created
+	scripts/local-down.sh
+
+check: test-hooks check-actions test-iac check-gitops helm-template ## Run every static check the PR workflow runs
 
 test-hooks: ## Test the agent guard hooks and repo scripts
 	$(PYTHON) -m unittest discover -s tests -t . -v
@@ -31,7 +38,7 @@ validate: ## Run terraform validate on every folder under iac/
 test-tf: ## Run terraform test (mock providers, no credentials) under iac/
 	scripts/terraform-test.sh iac
 
-iac-tools: ## Install the pinned tflint, trivy, checkov and pytest into .tools/
+iac-tools: ## Install the pinned tflint, trivy, kubeconform, helm, checkov and pytest into .tools/
 	PYTHON=$(PYTHON) scripts/install-iac-tools.sh
 
 tflint: iac-tools ## Lint every folder under iac/ with tflint and its AWS ruleset
@@ -55,3 +62,9 @@ test-iac: fmt-check validate test-tf tflint trivy checkov test-policies ## Run e
 
 simulate-policies: render-policies ## Opt-in: run the IAM policy simulator matrix (skips without AWS credentials)
 	$(PYTHON) iac/policy_checks/simulate_policies.py $(RENDERED)
+
+check-gitops: iac-tools ## Validate every manifest under gitops/ with kubeconform, CRD schemas included
+	scripts/check-gitops.sh gitops tests/fixtures/gitops-invalid
+
+helm-template: iac-tools ## Render the Argo CD Helm values for both clusters and validate the output
+	scripts/helm-template.sh iac/local/argocd build/helm

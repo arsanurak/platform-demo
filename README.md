@@ -10,11 +10,24 @@ _Coming soon:_ a few lines on what this repo demonstrates (migrating apps betwee
 
 ## Prerequisites
 
-_Coming soon:_ the tools and versions you need (Docker, kind, kubectl, helm, Terraform 1.7 or later or OpenTofu) and roughly how much memory Docker needs.
+To run the demo (`make up`):
+
+- Docker, with about 8 GB of memory for it (two kind clusters plus Argo CD on each)
+- [kind](https://kind.sigs.k8s.io/), kubectl and curl
+- Terraform 1.7 or later (OpenTofu should also work; CI uses Terraform)
+- Linux is the tested platform. On macOS, cloud-provider-kind maps gateway addresses through Docker; see its README.
+
+To run the checks only (`make check`): Terraform and Python 3. `make iac-tools` downloads the rest (tflint, trivy, kubeconform, helm, checkov) into `.tools/`, pinned and checksum-verified. No Docker, cluster or cloud account is needed.
 
 ## `make up`
 
-_Coming soon:_ the one command that brings up the old and new clusters, Argo CD and the sample apps, and how long the first bring-up takes.
+```sh
+make up
+```
+
+Runs Terraform in two stages: first the `old` and `new` kind clusters, then Argo CD and a root app on each (see `iac/local/README.md`). In between it starts cloud-provider-kind, which gives each cluster a Gateway API gateway. Argo CD then syncs everything under `gitops/`. It ends by calling `app01` on the old cluster through its gateway, and prints where the kubeconfig is (`build/kubeconfig`, contexts `kind-old` and `kind-new`). Your own `~/.kube/config` is not touched.
+
+The first bring-up has not been timed yet; expect it to take a while as images download.
 
 ## Tour 1: Migrate in waves
 
@@ -34,4 +47,8 @@ _Coming soon:_ what this demo leaves out by choice and why, and what would come 
 
 ## `make down`
 
-_Coming soon:_ the one command that removes every cluster and container this demo created.
+```sh
+make down
+```
+
+Deletes both kind clusters (and with them Argo CD and the apps), the cloud-provider-kind container and the gateway containers it started, and `build/kubeconfig`.
