@@ -1,0 +1,20 @@
+# ApplicationSet has no spec.generator (it is spec.generators).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: argocd
+spec:
+  generator:
+    - list:
+        elements: []
+  template:
+    metadata:
+      name: app
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/example/platform-demo.git
+        path: gitops
+      destination:
+        server: https://kubernetes.default.svc

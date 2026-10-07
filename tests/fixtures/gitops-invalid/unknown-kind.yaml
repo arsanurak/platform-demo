@@ -1,0 +1,5 @@
+# A kind with no schema must fail, not be skipped.
+apiVersion: example.com/v1
+kind: Widget
+metadata:
+  name: app01
