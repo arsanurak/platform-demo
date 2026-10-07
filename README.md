@@ -61,7 +61,29 @@ Parity failed: 2 of 6 checks differ.
 
 Run it after each `make wave-N`, before any cutover. `tests/scripts/test_parity.py` (part of `make check`) runs it against two local fake gateways, including ones that differ, to show it fails when it should.
 
-_Coming soon:_ `make cutover` and `make rollback`, with what you should see after each step.
+### Cutover and rollback
+
+```sh
+make cutover WAVE=1             # print the plan; changes nothing
+make cutover WAVE=1 CONFIRM=1   # switch wave 1's routing to new, then scale old to 0
+make rollback WAVE=1            # print the plan to undo it
+make rollback WAVE=1 CONFIRM=1  # scale old back up, wait until ready, route back to old
+```
+
+Clients reach every App through the old cluster's gateway. A **Cutover** refuses a wave that isn't healthy on new, then prints its plan:
+
+```text
+Cutover plan for wave 1 (app01 app02), through old's gateway:
+  app01: route    old HTTPRoute app01/app01: backend app01 -> app01-via-new (new gateway 172.18.0.9)
+  app01: scale    old Deployment app01/app01: 1 -> 0 replicas (definition kept)
+  ...
+  state:       build/cutover/wave-1.json records old's replicas and backends for make rollback WAVE=1
+Plan only: nothing changed. Run make cutover WAVE=1 CONFIRM=1 to apply it.
+```
+
+With `CONFIRM=1` it records old's replicas and backends in `build/cutover/wave-1.json`, adds an `<app>-via-new` Service on old that forwards to new's gateway, points each HTTPRoute at it, and only then scales old's Deployments to zero. The Deployments stay, so the old side can come back. Afterwards `curl -H 'Host: app01.example.com'` against old's gateway answers from new.
+
+A **Rollback** replays the recorded file: old's replicas first, then routing once they are ready, then it deletes the file. Both commands skip any step already done, so running either twice is safe. Old's Argo CD ignores replicas and HTTPRoute rules so it doesn't undo them; [ADR 2](docs/adr/0002-cutover-changes-old-at-runtime.md) explains why. `tests/scripts/test_cutover.py` (part of `make check`) runs both through `make` against a fake `kubectl` that records every call.
 
 ## Tour 2: Guardrails without credentials
 
