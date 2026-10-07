@@ -37,13 +37,19 @@ jobs:
       - name: Hook and script tests
         run: make test-hooks
 
-      - name: Install IaC tools (pinned versions, checksums verified)
+      - name: Install check tools (pinned versions, checksums verified)
         run: make iac-tools
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: IaC checks (fmt, validate, terraform test, tflint, trivy, checkov, policy tests)
         run: make test-iac
+
+      - name: GitOps manifests (kubeconform, Argo CD and Gateway API CRD schemas)
+        run: make check-gitops
+
+      - name: Argo CD Helm values (helm template, then kubeconform)
+        run: make helm-template
 
   # Opt-in: runs the IAM policy simulator matrix only when the repository sets
   # the POLICY_SIMULATOR_ROLE_ARN variable. Without it the job is skipped, so
