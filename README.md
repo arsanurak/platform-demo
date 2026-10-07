@@ -39,7 +39,29 @@ make wave-3   # app05, app06 (app05 calls app04, so it moves after it)
 
 `make wave-N` applies wave N's ApplicationSet to the new cluster's Argo CD and waits until its **Apps** are healthy there. It refuses to start while an earlier wave is not healthy on new. The old copies keep serving. The waves come from one definition, `gitops/waves.toml`: edit it, run `make waves`, and commit what it writes (see `gitops/README.md`).
 
-_Coming soon:_ `make parity`, `make cutover` and `make rollback`, with what you should see after each step.
+### Parity
+
+```sh
+make parity WAVE=1   # the Apps in waves 1 to WAVE; WAVE defaults to 1
+```
+
+`make parity` is the **Parity check**. For every App in waves 1 to `WAVE` it calls each endpoint through both clusters' gateways (`Host: <app>.example.com`) and compares the HTTP status, a chosen set of headers and the JSON shape: keys and types, not values, so a different pod name or CPU count still matches. The endpoints and headers live in the `[parity]` table of `gitops/waves.toml`. The gateway addresses are read from the clusters; set `OLD_URL` and `NEW_URL` to point it elsewhere. Any difference fails it with a non-zero exit and a diff like this:
+
+```text
+  ok    app01 GET /version
+  FAIL  app01 GET /healthz
+          status: old 200, new 503
+          header content-type: old 'application/json; charset=utf-8', new 'text/plain'
+          $: type old object, new not JSON
+          $.status: missing on new (old: string)
+  FAIL  app02 GET /version
+          $.commit: missing on new (old: string)
+Parity failed: 2 of 6 checks differ.
+```
+
+Run it after each `make wave-N`, before any cutover. `tests/scripts/test_parity.py` (part of `make check`) runs it against two local fake gateways, including ones that differ, to show it fails when it should.
+
+_Coming soon:_ `make cutover` and `make rollback`, with what you should see after each step.
 
 ## Tour 2: Guardrails without credentials
 

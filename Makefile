@@ -10,7 +10,7 @@ RENDERED := build/guardrails.json
 
 .PHONY: help check test-hooks check-actions fmt-check validate test-tf \
 	iac-tools tflint trivy checkov render-policies test-policies test-iac simulate-policies \
-	check-gitops helm-template up down waves check-waves
+	check-gitops helm-template up down waves check-waves parity
 
 help: ## List the targets
 	@grep -E '^[a-z0-9%-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -23,6 +23,10 @@ down: ## Remove every kind cluster and container `make up` created
 
 wave-%: ## Bring wave N (wave-1, wave-2, ...) up on new through Argo CD; earlier waves must be healthy first
 	scripts/wave.sh $*
+
+WAVE ?= 1
+parity: ## Compare old and new for the apps in waves 1..WAVE (default 1): status, chosen headers, JSON shape
+	$(PYTHON) scripts/parity.py $(WAVE)
 
 waves: ## Regenerate gitops/apps/ and gitops/waves/ from gitops/waves.toml
 	$(PYTHON) scripts/generate-waves.py

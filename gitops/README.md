@@ -7,7 +7,7 @@ Argo CD applications and ApplicationSets that Argo CD syncs onto the old and new
 | `bootstrap/<cluster>/` | The ApplicationSet that each cluster's root app syncs. It makes one Application per folder under `clusters/<cluster>/`, and on old also one per App under `apps/`. |
 | `clusters/<cluster>/<name>/` | Plain manifests for one Application, deployed into a namespace named after the folder. |
 | `clusters/<cluster>/gateway/` | The cluster's `web` Gateway, served by cloud-provider-kind. |
-| `waves.toml` | The one definition of the **Apps**, which App calls which, and the **Waves** that move them. Hand-edited. |
+| `waves.toml` | The one definition of the **Apps**, which App calls which, and the **Waves** that move them. Hand-edited. Its `[parity]` table sets the endpoints and headers `make parity` compares. |
 | `apps/<app>/` | Generated. **App** `<app>`: podinfo, non-root with a read-only root filesystem, reached through the gateway with `Host: <app>.example.com`. `app05` calls `app04` through podinfo's `--backend-url`. |
 | `waves/wave-<n>/` | Generated. An ApplicationSet that puts wave `n`'s **Apps** on the new cluster. `make wave-<n>` applies it. |
 
