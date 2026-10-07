@@ -90,7 +90,7 @@ Plan only: nothing changed. Run make cutover WAVE=1 CONFIRM=1 to apply it.
 
 With `CONFIRM=1` it records old's replicas and backends in `build/cutover/wave-1.json`, adds an `<app>-via-new` Service on old that forwards to new's gateway, points each HTTPRoute at it, and only then scales old's Deployments to zero. The Deployments stay, so the old side can come back. Afterwards `curl -H 'Host: app01.example.com'` against old's gateway answers from new.
 
-A **Rollback** replays the recorded file: old's replicas first, then routing once they are ready, then it deletes the file. Both commands skip any step already done, so running either twice is safe. Old's Argo CD ignores replicas and HTTPRoute rules so it doesn't undo them; [ADR 2](docs/adr/0002-cutover-changes-old-at-runtime.md) explains why. `tests/scripts/test_cutover.py` (part of `make check`) runs both through `make` against a fake `kubectl` that records every call.
+A **Rollback** replays the recorded file: old's replicas first, then routing once they are ready, then it deletes the file. Both commands end by waiting until old's gateway answers each App again, because the gateway picks up a route change a few seconds late. Both commands skip any step already done, so running either twice is safe. Old's Argo CD ignores replicas and HTTPRoute rules so it doesn't undo them; [ADR 2](docs/adr/0002-cutover-changes-old-at-runtime.md) explains why. `tests/scripts/test_cutover.py` (part of `make check`) runs both through `make` against a fake `kubectl` that records every call.
 
 ## Tour 2: Guardrails without credentials
 

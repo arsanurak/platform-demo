@@ -11,7 +11,8 @@ Clients reach every App through the old cluster's Gateway. Cutover, per App in t
 Before the first change it writes the old replicas and backends to
 build/cutover/wave-N.json (CUTOVER_STATE_DIR overrides the folder). Rollback replays
 that file: scale old back up, wait until ready, point the HTTPRoute back, then delete
-the file. Old's Argo CD ignores replicas and HTTPRoute rules (see
+the file. Both finish by waiting until old's gateway answers each App again, since the
+gateway takes a few seconds to pick up a route change (CUTOVER_SERVE_TIMEOUT, default 120s). Old's Argo CD ignores replicas and HTTPRoute rules (see
 gitops/bootstrap/old/applicationset.yaml), so it doesn't undo either command.
 
 Both print their plan first and change nothing without --confirm (CONFIRM=1).
@@ -22,11 +23,15 @@ import json
 import os
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WAVES_DIR = REPO_ROOT / "gitops/waves"
 KUBECONFIG = REPO_ROOT / "build/kubeconfig"
+SERVE_TIMEOUT = float(os.environ.get("CUTOVER_SERVE_TIMEOUT") or 120)
 
 
 def kubectl(context, *args, stdin=None, check=True):
@@ -81,12 +86,38 @@ def set_backend(app, name):
     kubectl("old", "-n", app, "patch", "httproute", app, "--type", "json", "-p", json.dumps(patch))
 
 
-def new_gateway_address():
-    gateway = get("new", "gateway", "gateway", "web") or {}
+def gateway_address(cluster):
+    gateway = get(cluster, "gateway", "gateway", "web") or {}
     addresses = gateway.get("status", {}).get("addresses", [])
     if not addresses:
-        sys.exit("Can't find the new cluster's gateway address. Run make up first.")
+        sys.exit(f"Can't find the {cluster} cluster's gateway address. Run make up first.")
     return addresses[0]["value"]
+
+
+def status_through_old(address, app):
+    request = urllib.request.Request(f"http://{address}/", headers={"Host": f"{app}.example.com"})
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status
+    except urllib.error.HTTPError as error:
+        return error.code
+    except (urllib.error.URLError, OSError) as error:
+        return f"unreachable ({getattr(error, 'reason', error)})"
+
+
+def wait_until_served(apps, by):
+    """Old's gateway applies a route change a few seconds late: wait until each App answers below 500."""
+    address = gateway_address("old")
+    deadline = time.monotonic() + SERVE_TIMEOUT
+    for app in apps:
+        while True:
+            status = status_through_old(address, app)
+            if isinstance(status, int) and status < 500:
+                break
+            if time.monotonic() > deadline:
+                sys.exit(f"{app} still answers {status} through old's gateway after {SERVE_TIMEOUT:.0f}s.")
+            time.sleep(2)
+        print(f"==> {app}: old's gateway answers {status}, served by {by}")
 
 
 def cutover(wave, apps, state_file, confirm):
@@ -95,7 +126,7 @@ def cutover(wave, apps, state_file, confirm):
         health = application.get("status", {}).get("health", {}).get("status", "missing")
         if health != "Healthy":
             sys.exit(f"{app} is not healthy on new ({health}). Run make wave-{wave} and make parity WAVE={wave} first.")
-    address = new_gateway_address()
+    address = gateway_address("new")
     # Recorded state wins over what old shows now: after a cutover old shows 0 replicas.
     recorded = json.loads(state_file.read_text())["apps"] if state_file.exists() else {}
     current = {app: old_side(app) for app in apps}
@@ -137,6 +168,7 @@ def cutover(wave, apps, state_file, confirm):
         if step == "scale":
             print(f"==> {app}: scaling old to 0 replicas")
             kubectl("old", "-n", app, "scale", "deployment", app, "--replicas=0")
+    wait_until_served(sorted({app for _, app in steps}), "new")
     print(f"Wave {wave} is cut over: old's gateway sends {' '.join(apps)} to new. Undo with make rollback WAVE={wave}.")
 
 
@@ -176,6 +208,7 @@ def rollback(wave, apps, state_file, confirm):
         if step == "route":
             print(f"==> {app}: routing old's gateway back to old")
             set_backend(app, recorded[app]["backend"])
+    wait_until_served(sorted({app for _, app in steps}), "old")
     state_file.unlink()
     print(f"Wave {wave} is rolled back: old serves {' '.join(apps)} again.")
 
