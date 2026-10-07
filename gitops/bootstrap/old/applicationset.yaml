@@ -1,7 +1,8 @@
 # Synced by the old cluster's root app (installed by iac/local/argocd).
-# One Application per folder under gitops/clusters/old/, named after the folder
-# and deployed into a namespace of the same name. Moving an app between
-# clusters is moving its folder.
+# One Application per folder under gitops/clusters/old/ (the gateway) and per
+# App under gitops/apps/, named after the folder and deployed into a namespace
+# of the same name. The old cluster runs every App; the new cluster gets them
+# a Wave at a time through `make wave-N`.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -16,6 +17,7 @@ spec:
         revision: main
         directories:
           - path: gitops/clusters/old/*
+          - path: gitops/apps/*
   template:
     metadata:
       name: "{{ .path.basename }}"

@@ -3,7 +3,8 @@
 #   1. stage 1 (iac/local/clusters): the old and new kind clusters
 #   2. cloud-provider-kind, which gives each cluster's Gateway an address
 #   3. stage 2 (iac/local/argocd): Argo CD and the root app on each cluster
-#   4. wait until Argo CD has synced app01 on old, then call it through the gateway
+#   4. wait until Argo CD has synced app01-app06 on old, then call app01 and
+#      app05 (which calls app04) through the gateway
 # Safe to run again: every step converges on what is already there.
 set -euo pipefail
 
@@ -34,16 +35,22 @@ terraform -chdir="$repo_root/iac/local/argocd" apply -input=false -auto-approve 
 
 old() { kubectl --kubeconfig "$kubeconfig" --context kind-old "$@"; }
 
-echo "==> waiting for Argo CD to sync app01 on old"
-for _ in $(seq 60); do
-  old -n argocd get application app01 >/dev/null 2>&1 && break
-  sleep 5
+apps="$(sed -n 's/^\[apps\.\(app[0-9]*\)\]$/\1/p' "$repo_root/gitops/waves.toml")"
+for app in $apps; do
+  echo "==> waiting for Argo CD to sync $app on old"
+  for _ in $(seq 60); do
+    old -n argocd get application "$app" >/dev/null 2>&1 && break
+    sleep 5
+  done
+  old -n argocd wait "application/$app" --for=jsonpath='{.status.health.status}'=Healthy --timeout=10m
 done
-old -n argocd wait application/app01 --for=jsonpath='{.status.health.status}'=Healthy --timeout=10m
 old -n gateway wait gateway/web --for=condition=Programmed --timeout=5m
 
 address="$(old -n gateway get gateway web -o jsonpath='{.status.addresses[0].value}')"
 echo "==> app01 through the old cluster's gateway at $address"
 curl -fsS --retry 10 --retry-all-errors --retry-delay 3 -H "Host: app01.example.com" "http://$address/"
+echo
+echo "==> app05 calling app04 (POST /api/echo is forwarded to app04's /echo)"
+curl -fsS --retry 10 --retry-all-errors --retry-delay 3 -H "Host: app05.example.com" -d "hello from app05" "http://$address/api/echo"
 echo
 echo "Up. Use KUBECONFIG=$kubeconfig with the kind-old and kind-new contexts."
