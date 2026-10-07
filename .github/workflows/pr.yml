@@ -42,3 +42,6 @@ jobs:
 
       - name: terraform validate
         run: make validate
+
+      - name: terraform test
+        run: make test-tf
