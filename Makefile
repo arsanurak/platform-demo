@@ -3,12 +3,12 @@
 SHELL := /usr/bin/env bash
 PYTHON ?= python3
 
-.PHONY: help check test-hooks check-actions fmt-check validate
+.PHONY: help check test-hooks check-actions fmt-check validate test-tf
 
 help: ## List the targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
 
-check: test-hooks check-actions fmt-check validate ## Run every static check the PR workflow runs
+check: test-hooks check-actions fmt-check validate test-tf ## Run every static check the PR workflow runs
 
 test-hooks: ## Test the agent guard hooks and repo scripts
 	$(PYTHON) -m unittest discover -s tests -t . -v
@@ -21,3 +21,6 @@ fmt-check: ## Check Terraform formatting under iac/
 
 validate: ## Run terraform validate on every folder under iac/
 	scripts/terraform-validate.sh iac
+
+test-tf: ## Run terraform test (mock providers, no credentials) under iac/
+	scripts/terraform-test.sh iac
