@@ -9,3 +9,5 @@ __pycache__/
 !.env.example
 .tools/
 build/
+# Child modules take their provider versions from the root that calls them.
+iac/**/modules/**/.terraform.lock.hcl

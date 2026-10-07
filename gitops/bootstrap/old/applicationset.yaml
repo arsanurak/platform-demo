@@ -1,0 +1,42 @@
+# Synced by the old cluster's root app (installed by iac/local/argocd).
+# One Application per folder under gitops/clusters/old/, named after the folder
+# and deployed into a namespace of the same name. Moving an app between
+# clusters is moving its folder.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cluster-apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/arsanurak/platform-demo.git
+        revision: main
+        directories:
+          - path: gitops/clusters/old/*
+  template:
+    metadata:
+      name: "{{ .path.basename }}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/arsanurak/platform-demo.git
+        targetRevision: main
+        path: "{{ .path.path }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ .path.basename }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 10
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m
