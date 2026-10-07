@@ -1,0 +1,3 @@
+# Python tools for `make test-iac`, pinned. `make iac-tools` installs them into .tools/venv.
+checkov==3.3.25
+pytest==9.1.1
