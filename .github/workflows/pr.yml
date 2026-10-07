@@ -37,6 +37,9 @@ jobs:
       - name: Hook and script tests
         run: make test-hooks
 
+      - name: Generated GitOps files match gitops/waves.toml
+        run: make check-waves
+
       - name: Install check tools (pinned versions, checksums verified)
         run: make iac-tools
         env:

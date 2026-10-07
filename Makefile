@@ -10,18 +10,29 @@ RENDERED := build/guardrails.json
 
 .PHONY: help check test-hooks check-actions fmt-check validate test-tf \
 	iac-tools tflint trivy checkov render-policies test-policies test-iac simulate-policies \
-	check-gitops helm-template up down
+	check-gitops helm-template up down waves check-waves
 
 help: ## List the targets
-	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9%-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
 
-up: ## Bring up the old and new kind clusters, Argo CD and app01 (needs Docker; see README)
+up: ## Bring up the old and new kind clusters, Argo CD and app01-app06 on old (needs Docker; see README)
 	scripts/local-up.sh
 
 down: ## Remove every kind cluster and container `make up` created
 	scripts/local-down.sh
 
-check: test-hooks check-actions test-iac check-gitops helm-template ## Run every static check the PR workflow runs
+wave-%: ## Bring wave N (wave-1, wave-2, ...) up on new through Argo CD; earlier waves must be healthy first
+	scripts/wave.sh $*
+
+waves: ## Regenerate gitops/apps/ and gitops/waves/ from gitops/waves.toml
+	$(PYTHON) scripts/generate-waves.py
+
+check-waves: waves ## Fail if the committed gitops/apps/ and gitops/waves/ differ from what the generator writes
+	@git diff --exit-code -- gitops/apps gitops/waves || { echo "Generated GitOps files drifted: run make waves and commit the result." >&2; exit 1; }
+	@untracked="$$(git ls-files --others --exclude-standard -- gitops/apps gitops/waves)"; \
+	  if [ -n "$$untracked" ]; then echo "Generated files not committed: $$untracked" >&2; exit 1; fi
+
+check: test-hooks check-actions check-waves test-iac check-gitops helm-template ## Run every static check the PR workflow runs
 
 test-hooks: ## Test the agent guard hooks and repo scripts
 	$(PYTHON) -m unittest discover -s tests -t . -v

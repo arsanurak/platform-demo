@@ -25,13 +25,21 @@ To run the checks only (`make check`): Terraform and Python 3. `make iac-tools` 
 make up
 ```
 
-Runs Terraform in two stages: first the `old` and `new` kind clusters, then Argo CD and a root app on each (see `iac/local/README.md`). In between it starts cloud-provider-kind, which gives each cluster a Gateway API gateway. Argo CD then syncs everything under `gitops/`. It ends by calling `app01` on the old cluster through its gateway, and prints where the kubeconfig is (`build/kubeconfig`, contexts `kind-old` and `kind-new`). Your own `~/.kube/config` is not touched.
+Runs Terraform in two stages: first the `old` and `new` kind clusters, then Argo CD and a root app on each (see `iac/local/README.md`). In between it starts cloud-provider-kind, which gives each cluster a Gateway API gateway. Argo CD then syncs each cluster's gateway, and on the old cluster all six **Apps**, `app01` to `app06`. It ends by calling `app01` through the old cluster's gateway, then `app05`'s `/api/echo`, which podinfo forwards to `app04`, so the reply shows `app05` calling `app04`. It prints where the kubeconfig is (`build/kubeconfig`, contexts `kind-old` and `kind-new`). Your own `~/.kube/config` is not touched.
 
 The first bring-up has not been timed yet; expect it to take a while as images download.
 
 ## Tour 1: Migrate in waves
 
-_Coming soon:_ `make wave-1`, then `make parity`, `make cutover` and `make rollback`, with what you should see after each step.
+```sh
+make wave-1   # app01, app02
+make wave-2   # app03, app04
+make wave-3   # app05, app06 (app05 calls app04, so it moves after it)
+```
+
+`make wave-N` applies wave N's ApplicationSet to the new cluster's Argo CD and waits until its **Apps** are healthy there. It refuses to start while an earlier wave is not healthy on new. The old copies keep serving. The waves come from one definition, `gitops/waves.toml`: edit it, run `make waves`, and commit what it writes (see `gitops/README.md`).
+
+_Coming soon:_ `make parity`, `make cutover` and `make rollback`, with what you should see after each step.
 
 ## Tour 2: Guardrails without credentials
 
