@@ -11,7 +11,9 @@ kubeconfig="$repo_root/build/kubeconfig"
 
 echo "==> stage 1: delete the kind clusters"
 terraform -chdir="$repo_root/iac/local/clusters" init -input=false >/dev/null
-terraform -chdir="$repo_root/iac/local/clusters" destroy -input=false -auto-approve \
+# One cluster at a time: kind locks the shared kubeconfig and fails, rather
+# than waits, when the other cluster holds the lock.
+terraform -chdir="$repo_root/iac/local/clusters" destroy -input=false -auto-approve -parallelism=1 \
   -var "kubeconfig_path=$kubeconfig"
 rm -f "$repo_root"/iac/local/argocd/terraform.tfstate "$repo_root"/iac/local/argocd/terraform.tfstate.backup
 
