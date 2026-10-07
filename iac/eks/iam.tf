@@ -2,7 +2,9 @@
 # cluster.
 
 resource "aws_iam_role" "cluster" {
-  name = "${var.cluster_name}-eks-cluster"
+  name                 = "${var.cluster_name}-eks-cluster"
+  path                 = "/workload/"
+  permissions_boundary = var.permissions_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -24,7 +26,9 @@ resource "aws_iam_role_policy_attachment" "cluster" {
 # Identity instead of borrowing the node's.
 
 resource "aws_iam_role" "node" {
-  name = "${var.cluster_name}-eks-node"
+  name                 = "${var.cluster_name}-eks-node"
+  path                 = "/workload/"
+  permissions_boundary = var.permissions_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -51,7 +55,9 @@ resource "aws_iam_role_policy_attachment" "node" {
 # else.
 
 resource "aws_iam_role" "flow_logs" {
-  name = "${var.cluster_name}-vpc-flow-logs"
+  name                 = "${var.cluster_name}-vpc-flow-logs"
+  path                 = "/workload/"
+  permissions_boundary = var.permissions_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

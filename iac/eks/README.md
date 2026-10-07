@@ -9,14 +9,14 @@ It uses plain `aws_*` resources and no community EKS module, so every setting is
 | `main.tf` | The EKS control plane, with a private-only API endpoint, KMS-encrypted secrets and access through EKS access entries |
 | `nodes.tf` | One managed node group in the private subnets, with IMDSv2 only and encrypted disks |
 | `network.tf` | VPC, private and public subnets, one NAT gateway, routes, VPC flow logs and a closed default security group |
-| `iam.tf` | Roles for the control plane, the nodes and the flow logs |
+| `iam.tf` | Roles for the control plane, the nodes and the flow logs, under `/workload/` with the guardrails' **Permission boundary** (see `../guardrails/`) |
 | `kms.tf`, `logs.tf` | The cluster's KMS key and its encrypted log groups |
 
 ## Checks
 
 - `make validate` runs `terraform validate`.
 - `make test-tf` runs `tests/eks.tftest.hcl` against a mocked AWS provider: no credentials, no account. Each `run` block checks one security property of the plan.
-- tflint, trivy and checkov run through `make test-iac` once it lands. The root passes all three with no skipped checks.
+- `make test-iac` runs all of the above plus tflint (with the AWS ruleset), trivy and checkov. This root passes all three with no skipped checks.
 
 ## What it leaves out
 

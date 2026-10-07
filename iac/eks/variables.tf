@@ -58,3 +58,14 @@ variable "admin_role_arn" {
     error_message = "admin_role_arn must be an IAM role ARN."
   }
 }
+
+variable "permissions_boundary_arn" {
+  description = "Permission boundary every role here carries. The guardrails' Execution role can only create roles that have it (see iac/guardrails)."
+  type        = string
+  default     = "arn:aws:iam::000000000000:policy/platform-demo-boundary"
+
+  validation {
+    condition     = can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:policy/.+$", var.permissions_boundary_arn))
+    error_message = "Must be an IAM policy ARN."
+  }
+}
