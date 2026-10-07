@@ -265,3 +265,17 @@ run "vpc_traffic_is_logged_and_the_default_security_group_is_closed" {
     error_message = "This VPC's default security group must be managed here, with no rules."
   }
 }
+
+# The guardrails' Execution role may only create roles under /workload/ that
+# carry its Permission boundary (see iac/guardrails), so every role here must.
+run "every_role_is_a_bounded_workload_role" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for role in [aws_iam_role.cluster, aws_iam_role.node, aws_iam_role.flow_logs] :
+      role.path == "/workload/" && role.permissions_boundary == var.permissions_boundary_arn
+    ])
+    error_message = "Every IAM role must sit under /workload/ and carry the Permission boundary."
+  }
+}

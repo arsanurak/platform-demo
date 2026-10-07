@@ -96,11 +96,11 @@ locals {
       Resource = [local.workload_roles]
     },
     {
-      Sid       = "PassWorkloadRolesToEksAndEc2"
+      Sid       = "PassWorkloadRolesToTheirServices"
       Effect    = "Allow"
       Action    = ["iam:PassRole"]
       Resource  = [local.workload_roles]
-      Condition = { StringEquals = { "iam:PassedToService" = ["eks.amazonaws.com", "ec2.amazonaws.com"] } }
+      Condition = { StringEquals = { "iam:PassedToService" = ["eks.amazonaws.com", "ec2.amazonaws.com", "vpc-flow-logs.amazonaws.com"] } }
     },
   ]
 

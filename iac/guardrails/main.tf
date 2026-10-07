@@ -18,8 +18,8 @@ resource "aws_iam_openid_connect_provider" "github" {
 
 # The Permission boundary: the most the Execution role can ever do.
 # trivy flags any iam:PassRole (AWS-0342). EKS needs it to hand the cluster and
-# node roles to the service; it is limited to role/workload/* and to the EKS
-# and EC2 services by condition, and the pytest checks forbid it on "*".
+# node roles to the service; it is limited to role/workload/* and to the EKS,
+# EC2 and VPC flow logs services by condition, and the pytest checks forbid it on "*".
 #trivy:ignore:AWS-0342
 resource "aws_iam_policy" "boundary" {
   name        = module.policies.boundary.name

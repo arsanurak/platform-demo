@@ -9,7 +9,7 @@ It uses plain `aws_*` resources and no community EKS module, so every setting is
 | `main.tf` | The EKS control plane, with a private-only API endpoint, KMS-encrypted secrets and access through EKS access entries |
 | `nodes.tf` | One managed node group in the private subnets, with IMDSv2 only and encrypted disks |
 | `network.tf` | VPC, private and public subnets, one NAT gateway, routes, VPC flow logs and a closed default security group |
-| `iam.tf` | Roles for the control plane, the nodes and the flow logs |
+| `iam.tf` | Roles for the control plane, the nodes and the flow logs, under `/workload/` with the guardrails' **Permission boundary** (see `../guardrails/`) |
 | `kms.tf`, `logs.tf` | The cluster's KMS key and its encrypted log groups |
 
 ## Checks
