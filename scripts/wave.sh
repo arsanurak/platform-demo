@@ -2,7 +2,8 @@
 # `make wave-N`: bring Wave N up on the new cluster through Argo CD.
 #   1. refuse unless every earlier Wave is already healthy on new, so an App
 #      never arrives before an App it calls (see gitops/waves.toml)
-#   2. apply gitops/waves/wave-N/applicationset.yaml to new's Argo CD
+#   2. apply gitops/waves/wave-N/applicationset.yaml to new's Argo CD, tracking
+#      GIT_REVISION (default main, as `make up` does) instead of the file's main
 #   3. wait until Argo CD reports every App in the Wave Healthy
 # The old copies keep serving; switching routing is `make cutover`'s job.
 # Needs the clusters from `make up`. Safe to run again.
@@ -12,6 +13,7 @@ wave="${1:?usage: wave.sh N}"
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 waves_dir="$repo_root/gitops/waves"
 kubeconfig="$repo_root/build/kubeconfig"
+revision="${GIT_REVISION:-main}"
 
 if ! [[ "$wave" =~ ^[1-9][0-9]*$ ]] || [ ! -f "$waves_dir/wave-$wave/applicationset.yaml" ]; then
   echo "No wave '$wave'. Waves: $(ls "$waves_dir" | tr '\n' ' ')" >&2
@@ -31,8 +33,8 @@ for ((earlier = 1; earlier < wave; earlier++)); do
   done
 done
 
-echo "==> wave $wave: applying its ApplicationSet to new"
-new apply -f "$waves_dir/wave-$wave/applicationset.yaml"
+echo "==> wave $wave: applying its ApplicationSet to new (tracking $revision)"
+sed "s|^\( *targetRevision:\) main\$|\1 $revision|" "$waves_dir/wave-$wave/applicationset.yaml" | new apply -f -
 
 for app in $(apps_in "$wave"); do
   echo "==> waiting for $app to be healthy on new"

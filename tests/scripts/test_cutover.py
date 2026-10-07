@@ -3,7 +3,9 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -20,9 +22,36 @@ def route(app, backend):
             "spec": {"rules": [{"backendRefs": [{"name": backend, "port": 80}]}]}}
 
 
-def two_clusters(wave1_health="Healthy"):
+class FakeOldGateway:
+    """Old's gateway: answers 503 to the first `unready` requests, then 200."""
+
+    def __init__(self, unready=0):
+        self.unready = unready
+        gateway = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                status = 503 if gateway.unready > 0 else 200
+                gateway.unready -= 1
+                self.send_response(status)
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.address = f"127.0.0.1:{self.server.server_address[1]}"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+def two_clusters(old_gateway, wave1_health="Healthy"):
     """Old runs every App with 2 replicas; wave 1 (app01, app02) is up on new."""
-    objects = {"kind-new/Gateway/gateway/web": {"status": {"addresses": [{"value": "172.18.0.9"}]}}}
+    objects = {"kind-new/Gateway/gateway/web": {"status": {"addresses": [{"value": "172.18.0.9"}]}},
+               "kind-old/Gateway/gateway/web": {"status": {"addresses": [{"value": old_gateway.address}]}}}
     for app in ["app01", "app02", "app03"]:
         objects[f"kind-old/Deployment/{app}/{app}"] = deployment(app, 2)
         objects[f"kind-old/HTTPRoute/{app}/{app}"] = route(app, app)
@@ -37,11 +66,13 @@ class CutoverTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp)
         self.state = self.tmp / "cluster.json"
         self.log = self.tmp / "calls.log"
-        self.state.write_text(json.dumps(two_clusters()))
+        self.gateway = FakeOldGateway()
+        self.addCleanup(self.gateway.close)
+        self.state.write_text(json.dumps(two_clusters(self.gateway)))
         self.log.touch()
 
-    def make(self, *args):
-        env = dict(os.environ, PATH=f"{FAKE_KUBECTL}:{os.environ['PATH']}",
+    def make(self, *args, **extra_env):
+        env = dict(os.environ, **extra_env, PATH=f"{FAKE_KUBECTL}:{os.environ['PATH']}",
                    FAKE_KUBE_STATE=str(self.state), FAKE_KUBE_LOG=str(self.log),
                    CUTOVER_STATE_DIR=str(self.tmp / "rollback"))
         return subprocess.run(["make", "-s", *args], cwd=REPO_ROOT, env=env, capture_output=True, text=True)
@@ -99,7 +130,7 @@ class CutoverTest(unittest.TestCase):
         self.assertEqual(recorded["apps"]["app02"]["replicas"], 2)
 
     def test_cutover_refuses_a_wave_that_is_not_healthy_on_new(self):
-        self.state.write_text(json.dumps(two_clusters(wave1_health="Progressing")))
+        self.state.write_text(json.dumps(two_clusters(self.gateway, wave1_health="Progressing")))
         result = self.make("cutover", "WAVE=1", "CONFIRM=1")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not healthy on new", result.stderr)
@@ -123,6 +154,22 @@ class CutoverTest(unittest.TestCase):
         for app in ["app01", "app02"]:
             self.assertEqual((self.backend(app), self.replicas(app)), (app, 2))
         self.assertFalse((self.tmp / "rollback/wave-1.json").exists())
+
+    def test_rollback_waits_until_old_gateway_serves_the_wave_again(self):
+        self.make("cutover", "WAVE=1", "CONFIRM=1")
+        self.gateway.unready = 2
+        result = self.make("rollback", "WAVE=1", "CONFIRM=1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("app01: old's gateway answers 200, served by old", result.stdout)
+        self.assertIn("app02: old's gateway answers 200, served by old", result.stdout)
+
+    def test_rollback_fails_and_keeps_its_state_if_old_gateway_never_serves(self):
+        self.make("cutover", "WAVE=1", "CONFIRM=1")
+        self.gateway.unready = 10**6
+        result = self.make("rollback", "WAVE=1", "CONFIRM=1", CUTOVER_SERVE_TIMEOUT="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("still answers 503", result.stderr)
+        self.assertTrue((self.tmp / "rollback/wave-1.json").exists())
 
     def test_rollback_brings_old_up_before_routing_back_to_it(self):
         self.make("cutover", "WAVE=1", "CONFIRM=1")

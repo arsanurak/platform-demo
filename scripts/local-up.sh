@@ -18,7 +18,9 @@ mkdir -p "$repo_root/build"
 
 echo "==> stage 1: kind clusters old and new"
 terraform -chdir="$repo_root/iac/local/clusters" init -input=false >/dev/null
-terraform -chdir="$repo_root/iac/local/clusters" apply -input=false -auto-approve \
+# One cluster at a time: kind locks the shared kubeconfig and fails, rather
+# than waits, when the other cluster holds the lock.
+terraform -chdir="$repo_root/iac/local/clusters" apply -input=false -auto-approve -parallelism=1 \
   -var "kubeconfig_path=$kubeconfig"
 
 echo "==> cloud-provider-kind"

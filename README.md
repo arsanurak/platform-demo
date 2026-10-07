@@ -1,6 +1,7 @@
 # platform-demo
 
 [![PR checks](https://github.com/arsanurak/platform-demo/actions/workflows/pr.yml/badge.svg?branch=main)](https://github.com/arsanurak/platform-demo/actions/workflows/pr.yml)
+[![Kind smoke test](https://github.com/arsanurak/platform-demo/actions/workflows/smoke.yml/badge.svg?branch=main)](https://github.com/arsanurak/platform-demo/actions/workflows/smoke.yml)
 
 > Work in progress. Each section below says what it will cover once the matching ticket lands.
 
@@ -28,6 +29,12 @@ make up
 Runs Terraform in two stages: first the `old` and `new` kind clusters, then Argo CD and a root app on each (see `iac/local/README.md`). In between it starts cloud-provider-kind, which gives each cluster a Gateway API gateway. Argo CD then syncs each cluster's gateway, and on the old cluster all six **Apps**, `app01` to `app06`. It ends by calling `app01` through the old cluster's gateway, then `app05`'s `/api/echo`, which podinfo forwards to `app04`, so the reply shows `app05` calling `app04`. It prints where the kubeconfig is (`build/kubeconfig`, contexts `kind-old` and `kind-new`). Your own `~/.kube/config` is not touched.
 
 The first bring-up has not been timed yet; expect it to take a while as images download.
+
+Argo CD tracks `main` of this repo. Set `GIT_REVISION` to deploy another branch or commit instead, for `make up` and every `make wave-N` (both read it): `GIT_REVISION=my-branch make up`.
+
+### Smoke test in CI
+
+The [Kind smoke test](.github/workflows/smoke.yml) workflow runs the demo for real on a GitHub runner: `make up`, `make wave-1`, `make parity`, a confirmed cutover (then checks that old's gateway is answered by new's pods), a confirmed rollback, and `make down` whatever happened. It runs on pull requests and pushes to `main` that touch `gitops/`, `iac/local/`, `scripts/` or the `Makefile`, weekly, and on demand, with `GIT_REVISION` set to the commit under test.
 
 ## Tour 1: Migrate in waves
 
@@ -83,7 +90,7 @@ Plan only: nothing changed. Run make cutover WAVE=1 CONFIRM=1 to apply it.
 
 With `CONFIRM=1` it records old's replicas and backends in `build/cutover/wave-1.json`, adds an `<app>-via-new` Service on old that forwards to new's gateway, points each HTTPRoute at it, and only then scales old's Deployments to zero. The Deployments stay, so the old side can come back. Afterwards `curl -H 'Host: app01.example.com'` against old's gateway answers from new.
 
-A **Rollback** replays the recorded file: old's replicas first, then routing once they are ready, then it deletes the file. Both commands skip any step already done, so running either twice is safe. Old's Argo CD ignores replicas and HTTPRoute rules so it doesn't undo them; [ADR 2](docs/adr/0002-cutover-changes-old-at-runtime.md) explains why. `tests/scripts/test_cutover.py` (part of `make check`) runs both through `make` against a fake `kubectl` that records every call.
+A **Rollback** replays the recorded file: old's replicas first, then routing once they are ready, then it deletes the file. Both commands end by waiting until old's gateway answers each App again, because the gateway picks up a route change a few seconds late. Both commands skip any step already done, so running either twice is safe. Old's Argo CD ignores replicas and HTTPRoute rules so it doesn't undo them; [ADR 2](docs/adr/0002-cutover-changes-old-at-runtime.md) explains why. `tests/scripts/test_cutover.py` (part of `make check`) runs both through `make` against a fake `kubectl` that records every call.
 
 ## Tour 2: Guardrails without credentials
 
