@@ -1,6 +1,7 @@
 # platform-demo
 
 [![PR checks](https://github.com/arsanurak/platform-demo/actions/workflows/pr.yml/badge.svg?branch=main)](https://github.com/arsanurak/platform-demo/actions/workflows/pr.yml)
+[![Kind smoke test](https://github.com/arsanurak/platform-demo/actions/workflows/smoke.yml/badge.svg?branch=main)](https://github.com/arsanurak/platform-demo/actions/workflows/smoke.yml)
 
 > Work in progress. Each section below says what it will cover once the matching ticket lands.
 
@@ -28,6 +29,12 @@ make up
 Runs Terraform in two stages: first the `old` and `new` kind clusters, then Argo CD and a root app on each (see `iac/local/README.md`). In between it starts cloud-provider-kind, which gives each cluster a Gateway API gateway. Argo CD then syncs each cluster's gateway, and on the old cluster all six **Apps**, `app01` to `app06`. It ends by calling `app01` through the old cluster's gateway, then `app05`'s `/api/echo`, which podinfo forwards to `app04`, so the reply shows `app05` calling `app04`. It prints where the kubeconfig is (`build/kubeconfig`, contexts `kind-old` and `kind-new`). Your own `~/.kube/config` is not touched.
 
 The first bring-up has not been timed yet; expect it to take a while as images download.
+
+Argo CD tracks `main` of this repo. Set `GIT_REVISION` to deploy another branch or commit instead, for `make up` and every `make wave-N` (both read it): `GIT_REVISION=my-branch make up`.
+
+### Smoke test in CI
+
+The [Kind smoke test](.github/workflows/smoke.yml) workflow runs the demo for real on a GitHub runner: `make up`, `make wave-1`, `make parity`, a confirmed cutover (then checks that old's gateway is answered by new's pods), a confirmed rollback, and `make down` whatever happened. It runs on pull requests and pushes to `main` that touch `gitops/`, `iac/local/`, `scripts/` or the `Makefile`, weekly, and on demand, with `GIT_REVISION` set to the commit under test.
 
 ## Tour 1: Migrate in waves
 

@@ -81,4 +81,12 @@ run "root_app_holds_the_cluster_applicationset" {
     }
     error_message = "The root app must track this repo at the given revision, in the cluster's bootstrap folder."
   }
+
+  assert {
+    condition = alltrue([
+      for op in yamldecode(yamldecode(helm_release.root_app.values[1]).applications.root.source.kustomize.patches[0].patch) :
+      op.value == (endswith(op.path, "repoURL") ? "https://github.com/example/platform-demo.git" : "ticket-2")
+    ])
+    error_message = "The root app must patch the bootstrap ApplicationSet to track repo_url at git_revision."
+  }
 }

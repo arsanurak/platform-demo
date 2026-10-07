@@ -13,7 +13,7 @@ Between the stages `make up` starts [cloud-provider-kind](https://github.com/kub
 
 - Chart versions are pinned in `argocd/charts.json`, read by both Terraform and `make helm-template`.
 - Helm values are in `argocd/values/`. Terraform sets only the per-cluster path and the git revision; CI renders the same files with `helm template`.
-- Set `GIT_REVISION` to make Argo CD track another branch: `GIT_REVISION=my-branch make up`.
+- Set `GIT_REVISION` to make Argo CD track another branch or commit: `GIT_REVISION=my-branch make up`. The root app renders `gitops/bootstrap/<cluster>/` with Kustomize and patches the ApplicationSet there to the same repo URL and revision; `make wave-N` applies its wave at `GIT_REVISION` too.
 
 ## Checks
 
